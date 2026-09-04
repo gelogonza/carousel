@@ -36,6 +36,7 @@ export default function Carousel({
   const lastSlide = slides.length - 1;
   const [position, setPosition] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [interacting, setInteracting] = useState(false);
   const positionRef = useRef(0);
   const targetRef = useRef(0);
   const dragVelocityRef = useRef(0);
@@ -115,6 +116,7 @@ export default function Carousel({
     pointerRef.current = { id: event.pointerId, x: event.clientX, time: performance.now() };
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging(true);
+    setInteracting(true);
     dragVelocityRef.current = 0;
   };
 
@@ -136,18 +138,34 @@ export default function Carousel({
     if (pointerRef.current.id !== event.pointerId) return;
     pointerRef.current.id = -1;
     setDragging(false);
+    setInteracting(false);
     const destination = Math.round(positionRef.current + dragVelocityRef.current * 2.1);
     animateTo(destination, 340);
   };
 
   const onWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
     const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-    const nextTarget = clamp(targetRef.current + delta * 0.0018, 0, lastSlide);
-    animateTo(nextTarget, 260);
+
+    // at either end, let the wheel fall through so a host page can keep scrolling
+    const atStart = delta < 0 && targetRef.current <= 0.002;
+    const atEnd = delta > 0 && targetRef.current >= lastSlide - 0.002;
+    if (atStart || atEnd) return;
+
+    event.preventDefault();
+
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    frameRef.current = null;
+    animationRef.current = null;
+
+    const next = clamp(positionRef.current + delta * 0.0018, 0, lastSlide);
+    positionRef.current = next;
+    targetRef.current = next;
+    setInteracting(true);
+    setPosition(next);
 
     if (wheelTimerRef.current !== null) window.clearTimeout(wheelTimerRef.current);
     wheelTimerRef.current = window.setTimeout(() => {
+      setInteracting(false);
       animateTo(Math.round(targetRef.current), 340);
     }, 90);
   };
@@ -158,7 +176,7 @@ export default function Carousel({
     <section className={`carousel-experience ${className}`.trim()}>
       <div className="carousel-ambient" style={{ backgroundImage: `url(${slides[activeIndex]})` }} />
       <div
-        className={`carousel-stage ${dragging ? 'is-dragging' : ''}`}
+        className={`carousel-stage ${dragging ? 'is-dragging' : ''} ${interacting ? 'is-interacting' : ''}`.replace(/\s+/g, ' ').trim()}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={finishDrag}

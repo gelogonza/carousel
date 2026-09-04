@@ -93,6 +93,13 @@
   will-change: transform, opacity;
 }
 
+/* During a drag or wheel gesture the opacity is rewritten every frame; a
+   transition would restart on each write and never settle, which reads as
+   stutter. Let the gesture drive it directly and re-enable easing on release. */
+.carousel-stage.is-interacting .carousel-card {
+  transition: none;
+}
+
 .carousel-card img {
   display: block;
   width: 100%;
