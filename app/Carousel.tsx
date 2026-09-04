@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const slides = [
+const defaultSlides = [
   'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=88',
   'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1600&q=88',
   'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1600&q=88',
@@ -11,43 +11,96 @@ const slides = [
   'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1600&q=88',
 ];
 
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+export type CarouselProps = {
+  images?: string[];
+  className?: string;
+  ariaLabel?: string;
+};
 
-export default function Carousel() {
+type Animation = {
+  from: number;
+  to: number;
+  startedAt: number;
+  duration: number;
+};
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+const easeOutQuart = (progress: number) => 1 - Math.pow(1 - progress, 4);
+
+export default function Carousel({
+  images = defaultSlides,
+  className = '',
+  ariaLabel = 'Image carousel',
+}: CarouselProps) {
+  const slides = images.length > 0 ? images : defaultSlides;
+  const lastSlide = slides.length - 1;
   const [position, setPosition] = useState(0);
   const [dragging, setDragging] = useState(false);
   const positionRef = useRef(0);
   const targetRef = useRef(0);
-  const velocityRef = useRef(0);
+  const dragVelocityRef = useRef(0);
   const pointerRef = useRef({ id: -1, x: 0, time: 0 });
+  const animationRef = useRef<Animation | null>(null);
   const frameRef = useRef<number | null>(null);
   const wheelTimerRef = useRef<number | null>(null);
 
-  const animate = useCallback(() => {
-    const distance = targetRef.current - positionRef.current;
-    velocityRef.current = velocityRef.current * 0.78 + distance * 0.14;
-    positionRef.current += velocityRef.current;
-
-    if (Math.abs(distance) < 0.0008 && Math.abs(velocityRef.current) < 0.0008) {
-      positionRef.current = targetRef.current;
-      velocityRef.current = 0;
-      setPosition(positionRef.current);
+  const animate = useCallback(function animateFrame(time: number) {
+    const animation = animationRef.current;
+    if (!animation) {
       frameRef.current = null;
       return;
     }
 
-    setPosition(positionRef.current);
-    frameRef.current = requestAnimationFrame(animate);
+    const progress = clamp((time - animation.startedAt) / animation.duration, 0, 1);
+    const nextPosition = animation.from + (animation.to - animation.from) * easeOutQuart(progress);
+    positionRef.current = nextPosition;
+    setPosition(nextPosition);
+
+    if (progress === 1) {
+      positionRef.current = animation.to;
+      setPosition(animation.to);
+      animationRef.current = null;
+      frameRef.current = null;
+      return;
+    }
+
+    frameRef.current = requestAnimationFrame(animateFrame);
   }, []);
 
-  const startAnimation = useCallback(() => {
-    if (frameRef.current === null) frameRef.current = requestAnimationFrame(animate);
-  }, [animate]);
+  const animateTo = useCallback((target: number, duration = 390) => {
+    const nextTarget = clamp(target, 0, lastSlide);
+    targetRef.current = nextTarget;
+
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      positionRef.current = nextTarget;
+      setPosition(nextTarget);
+      animationRef.current = null;
+      frameRef.current = null;
+      return;
+    }
+
+    const distance = Math.abs(nextTarget - positionRef.current);
+    animationRef.current = {
+      from: positionRef.current,
+      to: nextTarget,
+      startedAt: performance.now(),
+      duration: clamp(duration + distance * 35, 220, 480),
+    };
+    frameRef.current = requestAnimationFrame(animate);
+  }, [animate, lastSlide]);
 
   const goTo = useCallback((index: number) => {
-    targetRef.current = clamp(index, 0, slides.length - 1);
-    startAnimation();
-  }, [startAnimation]);
+    animateTo(index);
+  }, [animateTo]);
+
+  useEffect(() => {
+    const nextPosition = clamp(positionRef.current, 0, lastSlide);
+    positionRef.current = nextPosition;
+    targetRef.current = nextPosition;
+    setPosition(nextPosition);
+  }, [lastSlide]);
 
   useEffect(() => () => {
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
@@ -55,10 +108,14 @@ export default function Carousel() {
   }, []);
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    frameRef.current = null;
+    animationRef.current = null;
+    targetRef.current = positionRef.current;
     pointerRef.current = { id: event.pointerId, x: event.clientX, time: performance.now() };
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging(true);
-    velocityRef.current = 0;
+    dragVelocityRef.current = 0;
   };
 
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -66,11 +123,11 @@ export default function Carousel() {
     const now = performance.now();
     const dx = event.clientX - pointerRef.current.x;
     const dt = Math.max(now - pointerRef.current.time, 1);
-    const scale = Math.min(window.innerWidth * 0.46, 540);
+    const scale = Math.min(event.currentTarget.clientWidth * 0.46, 540);
     const delta = -dx / scale;
-    positionRef.current = clamp(positionRef.current + delta, -0.2, slides.length - 0.8);
+    positionRef.current = clamp(positionRef.current + delta, -0.12, lastSlide + 0.12);
     targetRef.current = positionRef.current;
-    velocityRef.current = clamp((delta / dt) * 15, -0.34, 0.34);
+    dragVelocityRef.current = clamp((delta / dt) * 15, -0.34, 0.34);
     pointerRef.current = { id: event.pointerId, x: event.clientX, time: now };
     setPosition(positionRef.current);
   };
@@ -79,27 +136,27 @@ export default function Carousel() {
     if (pointerRef.current.id !== event.pointerId) return;
     pointerRef.current.id = -1;
     setDragging(false);
-    targetRef.current = clamp(Math.round(positionRef.current + velocityRef.current * 2.4), 0, slides.length - 1);
-    startAnimation();
+    const destination = Math.round(positionRef.current + dragVelocityRef.current * 2.1);
+    animateTo(destination, 340);
   };
 
   const onWheel = (event: React.WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
     const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-    targetRef.current = clamp(targetRef.current + delta * 0.0018, 0, slides.length - 1);
+    const nextTarget = clamp(targetRef.current + delta * 0.0018, 0, lastSlide);
+    animateTo(nextTarget, 260);
+
     if (wheelTimerRef.current !== null) window.clearTimeout(wheelTimerRef.current);
     wheelTimerRef.current = window.setTimeout(() => {
-      targetRef.current = Math.round(targetRef.current);
-      startAnimation();
+      animateTo(Math.round(targetRef.current), 340);
     }, 90);
-    startAnimation();
   };
 
-  const activeIndex = clamp(Math.round(position), 0, slides.length - 1);
+  const activeIndex = clamp(Math.round(position), 0, lastSlide);
 
   return (
-    <main className="experience">
-      <div className="ambient" style={{ backgroundImage: `url(${slides[activeIndex]})` }} />
+    <section className={`carousel-experience ${className}`.trim()}>
+      <div className="carousel-ambient" style={{ backgroundImage: `url(${slides[activeIndex]})` }} />
       <div
         className={`carousel-stage ${dragging ? 'is-dragging' : ''}`}
         onPointerDown={onPointerDown}
@@ -113,7 +170,7 @@ export default function Carousel() {
         }}
         role="region"
         aria-roledescription="carousel"
-        aria-label="Image carousel"
+        aria-label={ariaLabel}
         tabIndex={0}
       >
         <div className="card-plane">
@@ -121,20 +178,23 @@ export default function Carousel() {
             const offset = index - position;
             const distance = Math.abs(offset);
             const direction = offset < 0 ? -1 : 1;
-            const x = offset * 38 + direction * Math.max(0, distance - 1) * 5;
-            const rotate = offset === 0 ? 0 : direction * -8;
-            const scale = Math.max(0.62, 1 - distance * 0.08);
+            const horizontalSpread = distance <= 1
+              ? distance * 60
+              : 60 + Math.log2(distance) * 24 + Math.max(0, distance - 4) * 2;
+            const x = direction * horizontalSpread;
+            const rotate = -3 - clamp(offset, -1, 1) * 7.8;
+            const scale = Math.max(0.58, 0.92 - distance * 0.035);
             return (
               <article
-                key={image}
+                key={`${image}-${index}`}
                 className="carousel-card"
                 style={{
                   '--x': `${x}%`,
-                  '--z': `${-distance * 120}px`,
+                  '--z': `${-distance * 92}px`,
                   '--rotate': `${rotate}deg`,
                   '--scale': scale,
                   zIndex: 100 - Math.round(distance * 10),
-                  opacity: distance > 4.2 ? 0 : Math.max(0.16, 1 - Math.max(0, distance - 2.6) * 0.3),
+                  opacity: distance > 10.2 ? 0 : Math.max(0.24, 1 - Math.max(0, distance - 2) * 0.08),
                 } as React.CSSProperties}
                 aria-hidden={index !== activeIndex}
               >
@@ -144,6 +204,6 @@ export default function Carousel() {
           })}
         </div>
       </div>
-    </main>
+    </section>
   );
 }

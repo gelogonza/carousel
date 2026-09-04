@@ -1,32 +1,28 @@
 @import 'tailwindcss';
 
-:root {
-  --card-width: clamp(430px, 56vw, 780px);
-  --card-height: clamp(270px, 35vw, 485px);
-}
-
-* { box-sizing: border-box; }
-
-html, body {
-  margin: 0;
-  min-height: 100%;
+.carousel-demo-page {
+  min-height: 100svh;
   background: #0e100d;
 }
 
-body {
-  overflow: hidden;
-  overscroll-behavior: none;
+.carousel-experience,
+.carousel-experience * {
+  box-sizing: border-box;
 }
 
-.experience {
+.carousel-experience {
+  --card-width: clamp(430px, 56vw, 780px);
+  --card-height: clamp(295px, 38vw, 530px);
   position: relative;
-  min-height: 100svh;
+  width: 100%;
+  min-height: clamp(480px, 72vw, 780px);
   overflow: hidden;
   isolation: isolate;
   background: #0e100d;
+  overscroll-behavior: contain;
 }
 
-.ambient {
+.carousel-ambient {
   position: absolute;
   inset: -14%;
   z-index: -2;
@@ -35,18 +31,17 @@ body {
   opacity: .17;
   filter: blur(62px) saturate(.7);
   transform: scale(1.18);
-  transition: background-image .5s ease;
 }
 
-.experience::after {
+.carousel-experience::after {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(circle at 47% 46%, transparent 0, rgba(8,10,8,.08) 44%, rgba(8,10,8,.54) 100%),
-    linear-gradient(180deg, rgba(7,9,7,.45), transparent 25%, transparent 72%, rgba(7,9,7,.54));
+    radial-gradient(circle at 47% 46%, transparent 0, rgba(8, 10, 8, .08) 44%, rgba(8, 10, 8, .54) 100%),
+    linear-gradient(180deg, rgba(7, 9, 7, .45), transparent 25%, transparent 72%, rgba(7, 9, 7, .54));
 }
 
 .carousel-stage {
@@ -60,12 +55,18 @@ body {
   perspective-origin: 52% 50%;
 }
 
-.carousel-stage.is-dragging { cursor: grabbing; }
-.carousel-stage:focus-visible { outline: none; }
+.carousel-stage.is-dragging {
+  cursor: grabbing;
+}
+
+.carousel-stage:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, .78);
+  outline-offset: -4px;
+}
 
 .card-plane {
   position: absolute;
-  left: 37%;
+  left: 29%;
   top: 50%;
   width: var(--card-width);
   height: var(--card-height);
@@ -76,19 +77,19 @@ body {
 .carousel-card {
   --x: 0%;
   --z: 0px;
-  --rotate: 0deg;
+  --rotate: -5deg;
   --scale: 1;
   position: absolute;
   inset: 0;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: 8px;
   background: #20241c;
   box-shadow:
-    0 40px 110px rgba(0,0,0,.46),
-    -1px 0 0 rgba(255,255,255,.08) inset;
+    0 40px 110px rgba(0, 0, 0, .46),
+    -1px 0 0 rgba(255, 255, 255, .08) inset;
   transform-origin: center left;
   transform: translate3d(var(--x), 0, var(--z)) rotateY(var(--rotate)) scale(var(--scale));
-  transition: opacity .18s ease, filter .32s ease;
+  transition: opacity .24s ease-out, filter .32s ease-out;
   will-change: transform, opacity;
 }
 
@@ -102,16 +103,29 @@ body {
 }
 
 @media (max-width: 700px) {
-  :root {
-    --card-width: min(82vw, 440px);
-    --card-height: min(52vw, 278px);
+  .carousel-experience {
+    --card-width: min(54vw, 360px);
+    --card-height: min(38vw, 250px);
+    min-height: clamp(420px, 118vw, 620px);
   }
 
-  .card-plane { left: 28%; }
-  .carousel-stage { perspective-origin: 40% 50%; }
-  .carousel-card { border-radius: 13px; }
+  .card-plane {
+    left: 28%;
+  }
+
+  .carousel-stage {
+    perspective-origin: 45% 50%;
+  }
+
+  .carousel-card {
+    border-radius: 6px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition-duration: .01ms !important; }
+  .carousel-experience *,
+  .carousel-experience *::before,
+  .carousel-experience *::after {
+    transition-duration: .01ms !important;
+  }
 }
