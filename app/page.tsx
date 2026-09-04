@@ -1,5 +1,9 @@
 import Carousel from './Carousel';
 
 export default function Home() {
-  return <Carousel />;
+  return (
+    <main className="carousel-demo-page">
+      <Carousel />
+    </main>
+  );
 }
